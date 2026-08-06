@@ -43,6 +43,12 @@ jobs:
             -project ios/App/App.xcodeproj \
             -clonedSourcePackagesDirPath ./spm \
             -verbose
+          
+      - name: Diagnostic xcresult dump on failure
+        if: failure()
+        run: |
+          echo "Searching for xcresult bundles..."
+          find /var/folders -name "*.xcresult" -type d 2>/dev/null
 
       - name: Build Unsigned Archive
         run: |
