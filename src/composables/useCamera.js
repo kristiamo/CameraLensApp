@@ -11,7 +11,7 @@ export function useCamera() {
 
     /**
      * Start the native capture session with resolution & lens parameters
-     * @param {string} preset - Resolution preset ("hd1280x720", "hd1920x1080", "hd3840x2160")
+     * @param {string} preset - Resolution preset ("hd1280x720", "hd1920x1080", "hd4K3840x2160")
      * @param {string} lensType - "Wide", "UltraWide", or "Telephoto"
      */
     async function startCameraSession(preset = 'hd1920x1080', lensType = 'Wide') {

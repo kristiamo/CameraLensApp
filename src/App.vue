@@ -61,7 +61,7 @@ async function handleTestBridge() {
         <select v-model="selectedPreset" :disabled="isStreaming">
           <option value="hd1280x720">720p (1280x720)</option>
           <option value="hd1920x1080">1080p (1920x1080)</option>
-          <option value="hd3840x2160">4K (3840x2160)</option>
+          <option value="hd4K3840x2160">4K (3840x2160)</option>
         </select>
       </div>
 

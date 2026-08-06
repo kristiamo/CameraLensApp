@@ -270,8 +270,8 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         switch presetString {
         case "hd1280x720":
             return .hd1280x720
-        case "hd3840x2160":
-            return .hd3840x2160
+        case "hd4K3840x2160":
+            return .hd4K3840x2160
         default:
             return .hd1920x1080
         }
