@@ -38,7 +38,7 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         let lensType = call.getString("lensType") ?? "Wide"
         
         sessionQueue.async { [weak self] in
-            unowned let self = self
+            guard let self = self else { return }
             
             if self.captureSession.isRunning {
                 call.resolve(["status": "already_running"])
@@ -153,7 +153,7 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         let lensType = call.getString("lensType")
 
         sessionQueue.async { [weak self] in
-            unowned let self = self
+            guard let self = self else { return }
 
             // Handle lens switch if requested lens differs from active device
             if let targetLens = lensType, let currentDev = self.activeDevice {
