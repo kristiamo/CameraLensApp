@@ -208,17 +208,20 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
     // MARK: - Helper Methods
 
     private func setupPreviewLayer() {
-        guard let webView = self.bridge?.webView else { return }
+    guard let webView = self.bridge?.webView, let superview = webView.superview else {
+        print("[CameraLensPlugin] WebView or Superview is nil")
+        return
+    }
 
         // Remove previous layer if existing
-        previewLayer?.removeFromSuperlayer()
+        self.previewLayer?.removeFromSuperlayer()
 
         let layer = AVCaptureVideoPreviewLayer(session: self.captureSession)
         layer.videoGravity = .resizeAspectFill
         layer.frame = webView.bounds
 
         // Insert the native camera preview beneath the Capacitor WebView
-        webView.superview?.layer.insertSublayer(layer, below: webView.layer)
+        superview.layer.insertSublayer(layer, below: webView.layer)
         // Ensure webview background is transparent so preview layer shows through
         webView.isOpaque = false
         webView.backgroundColor = .clear
