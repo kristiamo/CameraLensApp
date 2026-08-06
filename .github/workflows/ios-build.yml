@@ -50,7 +50,7 @@ jobs:
           RESULT_PATH=$(find /var/folders -name "*.xcresult" -type d 2>/dev/null | head -n 1)
           if [ -n "$RESULT_PATH" ]; then
             echo "Parsing result bundle at: $RESULT_PATH"
-            xcrun xcresulttool get --path "$RESULT_PATH" --format json > result.json
+            xcrun xcresulttool get --legacy --path "$RESULT_PATH" --format json > result.json
             
             python3 -c '
             import json
