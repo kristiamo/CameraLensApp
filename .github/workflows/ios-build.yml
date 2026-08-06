@@ -27,64 +27,16 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
         
-      - name: Show Package.swift files
-        run: |
-          find . -name Package.swift -print
-          
-      - name: Show Resolved
-        run: |
-          find . -name Package.resolved -print
-          
       
-      - name: Show package resolution details
+      - name: CocoaPods Install
         run: |
-          xcodebuild \
-            -resolvePackageDependencies \
-            -project ios/App/App.xcodeproj \
-            -clonedSourcePackagesDirPath ./spm \
-            -verbose
-          
-      - name: Extract Xcode Diagnostics
-        if: failure()
-        run: |
-          RESULT_PATH=$(find /var/folders -name "*.xcresult" -type d 2>/dev/null | head -n 1)
-          if [ -n "$RESULT_PATH" ]; then
-            echo "Parsing result bundle at: $RESULT_PATH"
-            xcrun xcresulttool get --legacy --path "$RESULT_PATH" --format json > result.json
-            
-            python3 -c '
-            import json
-        
-            with open("result.json", "r") as f:
-                data = json.load(f)
-        
-            def extract_messages(obj):
-                if isinstance(obj, dict):
-                    if "_type" in obj and obj["_type"]["_name"] == "ActionTestFailureSummary":
-                        print("FAILURE:", obj.get("message", {}).get("_value", ""))
-                    for k, v in obj.items():
-                        if k in ["errorSummaries", "warningSummaries"]:
-                            print(f"=== {k.upper()} ===")
-                            if isinstance(v, dict) and "_values" in v:
-                                for item in v["_values"]:
-                                    msg = item.get("message", {}).get("_value", "")
-                                    print("-", msg)
-                        else:
-                            extract_messages(v)
-                elif isinstance(obj, list):
-                    for item in obj:
-                        extract_messages(item)
-        
-            extract_messages(data)
-            '
-          else
-            echo "No .xcresult bundle found."
-          fi
+          cd ios/App
+          pod install --repo-update
 
       - name: Build Unsigned Archive
         run: |
           xcodebuild archive \
-            -project ios/App/App.xcodeproj \
+            -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
             -archivePath build/CameraLensApp.xcarchive \
