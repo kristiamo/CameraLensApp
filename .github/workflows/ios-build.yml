@@ -34,6 +34,7 @@ jobs:
       - name: Show Resolved
         run: |
           find . -name Package.resolved -print
+          
       
       - name: Show package resolution details
         run: |
