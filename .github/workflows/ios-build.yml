@@ -30,12 +30,17 @@ jobs:
       - name: Show Package.swift files
         run: |
           find . -name Package.swift -print
+          
+      - name: Show Resolved
+        run: |
+          find . -name Package.resolved -print
       
-      - name: Show Swift package resolution
+      - name: Show package resolution details
         run: |
           xcodebuild \
             -resolvePackageDependencies \
             -project ios/App/App.xcodeproj \
+            -clonedSourcePackagesDirPath ./spm \
             -verbose
 
       - name: Build Unsigned Archive
