@@ -26,11 +26,17 @@ jobs:
         
       - name: Show Xcode version
         run: xcodebuild -version
-      
-      - name: Show Swift packages
+        
+      - name: Show Package.swift files
         run: |
-          xcodebuild -resolvePackageDependencies \
-            -project ios/App/App.xcodeproj
+          find . -name Package.swift -print
+      
+      - name: Show Swift package resolution
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project ios/App/App.xcodeproj \
+            -verbose
 
       - name: Build Unsigned Archive
         run: |
