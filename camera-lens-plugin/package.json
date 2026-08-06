@@ -1,0 +1,10 @@
+﻿{
+  "name": "camera-lens-plugin",
+  "version": "1.0.0",
+  "main": "",
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "appId": "com.mycompany.lensapp",
+  "appName": "MyLensApp",
+  "webDir": "dist"
+}
