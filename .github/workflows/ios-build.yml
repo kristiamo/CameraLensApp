@@ -53,30 +53,30 @@ jobs:
             xcrun xcresulttool get --path "$RESULT_PATH" --format json > result.json
             
             python3 -c '
-    import json
-
-    with open("result.json", "r") as f:
-        data = json.load(f)
-
-    def extract_messages(obj):
-        if isinstance(obj, dict):
-            if "_type" in obj and obj["_type"]["_name"] == "ActionTestFailureSummary":
-                print("FAILURE:", obj.get("message", {}).get("_value", ""))
-            for k, v in obj.items():
-                if k in ["errorSummaries", "warningSummaries"]:
-                    print(f"=== {k.upper()} ===")
-                    if isinstance(v, dict) and "_values" in v:
-                        for item in v["_values"]:
-                            msg = item.get("message", {}).get("_value", "")
-                            print("-", msg)
-                else:
-                    extract_messages(v)
-        elif isinstance(obj, list):
-            for item in obj:
-                extract_messages(item)
-
-    extract_messages(data)
-    '
+            import json
+        
+            with open("result.json", "r") as f:
+                data = json.load(f)
+        
+            def extract_messages(obj):
+                if isinstance(obj, dict):
+                    if "_type" in obj and obj["_type"]["_name"] == "ActionTestFailureSummary":
+                        print("FAILURE:", obj.get("message", {}).get("_value", ""))
+                    for k, v in obj.items():
+                        if k in ["errorSummaries", "warningSummaries"]:
+                            print(f"=== {k.upper()} ===")
+                            if isinstance(v, dict) and "_values" in v:
+                                for item in v["_values"]:
+                                    msg = item.get("message", {}).get("_value", "")
+                                    print("-", msg)
+                        else:
+                            extract_messages(v)
+                elif isinstance(obj, list):
+                    for item in obj:
+                        extract_messages(item)
+        
+            extract_messages(data)
+            '
           else
             echo "No .xcresult bundle found."
           fi
