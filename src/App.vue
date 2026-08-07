@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useCamera } from './composables/useCamera';
 
 const { 
@@ -8,11 +8,19 @@ const {
   isLoading, 
   isStreaming,
   encoderStats,
+  deviceCapabilities,
+  focusValue,
+  focusMode,
+  wbTemperature,
+  wbTint,
+  wbMode,
   wsConnected,
   wsServerUrl,
   startCameraSession, 
   stopCameraSession, 
   setManualLensSettings, 
+  setFocusDistance,
+  setWhiteBalance,
   updateEncoderSettings,
   fetchEncoderStats,
   connectWebSocket,
@@ -24,7 +32,7 @@ const {
 const desktopIp = ref('192.168.1.166');
 const desktopPort = ref(8080);
 
-// Control State
+// Selection & Parameters
 const selectedPreset = ref('hd1920x1080');
 const selectedLens = ref('Wide');
 const targetBitrate = ref(4000000); // 4 Mbps
@@ -36,6 +44,13 @@ const zoomValue = ref(1.0);
 
 let statsInterval = null;
 let removeListeners = null;
+
+// Dynamic device range compute helpers
+const minISO = computed(() => deviceCapabilities.value?.minISO || 50);
+const maxISO = computed(() => deviceCapabilities.value?.maxISO || 1200);
+const minShutter = computed(() => deviceCapabilities.value?.minShutter || 0.0005);
+const maxShutter = computed(() => deviceCapabilities.value?.maxShutter || 0.1);
+const maxZoom = computed(() => deviceCapabilities.value?.maxZoom || 8.0);
 
 async function handleStartSession() {
   await startCameraSession(selectedPreset.value, selectedLens.value, targetBitrate.value, targetFPS.value);
@@ -51,13 +66,28 @@ async function handleUpdateEncoder() {
   await updateEncoderSettings(targetBitrate.value, targetFPS.value);
 }
 
-async function handleApplySettings() {
+async function handleApplyCameraSettings() {
   await setManualLensSettings({
     iso: isoValue.value,
     shutter: shutterSpeed.value,
     zoom: zoomValue.value,
-    lensType: selectedLens.value
+    lensType: selectedLens.value,
+    focus: focusMode.value === 'locked' ? focusValue.value : undefined,
+    focusMode: focusMode.value,
+    wbTemperature: wbMode.value === 'locked' ? wbTemperature.value : undefined,
+    wbTint: wbMode.value === 'locked' ? wbTint.value : undefined,
+    wbMode: wbMode.value
   });
+}
+
+async function handleToggleFocusMode() {
+  const newMode = focusMode.value === 'continuous' ? 'locked' : 'continuous';
+  await setFocusDistance(focusValue.value, newMode);
+}
+
+async function handleToggleWBMode() {
+  const newMode = wbMode.value === 'continuous' ? 'locked' : 'continuous';
+  await setWhiteBalance(wbTemperature.value, wbTint.value, newMode);
 }
 
 async function handleToggleWebSocket() {
@@ -69,7 +99,7 @@ async function handleToggleWebSocket() {
 }
 
 onMounted(() => {
-  // Sync state when desktop modifies camera/encoder settings remotely
+  // Synchronize state when desktop modifies parameters remotely over WebSocket
   removeListeners = setupRemoteListeners(
     (camConfig) => {
       if (camConfig.iso !== undefined) isoValue.value = camConfig.iso;
@@ -93,7 +123,7 @@ onUnmounted(() => {
 <template>
   <main class="container">
     <header class="header">
-      <h1>Phase 3: Real-Time Streamer</h1>
+      <h1>Phase 4: Manual Studio Streamer</h1>
       <div class="badge-group">
       <span class="badge" :class="{ active: isStreaming }">
         {{ isStreaming ? 'ENCODER RUNNING' : 'STOPPED' }}
@@ -104,7 +134,7 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <!-- 1. Desktop WebSocket Streaming Target -->
+    <!-- 1. Desktop Network Target -->
     <section class="card">
       <h2>1. Desktop Network Target</h2>
       <div class="field-group">
@@ -128,7 +158,7 @@ onUnmounted(() => {
 
     <!-- 2. Session & Encoder Setup -->
     <section class="card">
-      <h2>2. Session & H.264 Encoder Config</h2>
+      <h2>2. Capture Preset & H.264 Bitrate</h2>
       
       <div class="field-group">
       <div class="field">
@@ -164,12 +194,12 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <!-- 3. Real-Time Hardware Encoder Metrics -->
+    <!-- 3. Hardware Metrics -->
     <section v-if="isStreaming && encoderStats" class="card stats-card">
-      <h2>Hardware Encoding & Stream Metrics</h2>
+      <h2>Hardware Encoding Metrics</h2>
       <div class="metrics-grid">
         <div class="metric">
-          <span class="metric-label">Total Frames</span>
+          <span class="metric-label">Encoded Frames</span>
           <span class="metric-value">{{ encoderStats.encodedFrames }}</span>
         </div>
         <div class="metric">
@@ -181,45 +211,87 @@ onUnmounted(() => {
           <span class="metric-value">{{ (encoderStats.lastFrameBytes / 1024).toFixed(1) }} KB</span>
         </div>
         <div class="metric">
-          <span class="metric-label">Target Bitrate</span>
+          <span class="metric-label">Bitrate</span>
           <span class="metric-value">{{ (encoderStats.bitrate / 1000000).toFixed(1) }} Mbps</span>
         </div>
       </div>
     </section>
 
-    <!-- 4. Manual Camera Controls -->
+    <!-- 4. Granular Manual Camera Controls -->
     <section class="card" :class="{ disabled: !isStreaming }">
-      <h2>4. Camera Hardware Controls</h2>
+      <h2>4. Granular Manual Camera Controls</h2>
       
       <div class="field">
-        <label>Switch Lens:</label>
-        <select v-model="selectedLens" :disabled="!isStreaming" @change="handleApplySettings">
+        <label>Switch Physical Lens:</label>
+        <select v-model="selectedLens" :disabled="!isStreaming" @change="handleApplyCameraSettings">
           <option value="Wide">Wide Angle</option>
           <option value="UltraWide">Ultra Wide</option>
           <option value="Telephoto">Telephoto</option>
         </select>
       </div>
 
-      <div class="field">
-        <label>Digital Zoom ({{ zoomValue }}x):</label>
-        <input v-model.number="zoomValue" type="range" min="1.0" max="8.0" step="0.1" :disabled="!isStreaming" @input="handleApplySettings"/>
+      <!-- Focus Distance & Mode -->
+      <div class="control-box">
+        <div class="control-header">
+          <label>Focus Distance: <strong>{{ focusMode === 'continuous' ? 'AUTO' : focusValue.toFixed(2) }}</strong></label>
+          <button class="btn-sm" :disabled="!isStreaming" @click="handleToggleFocusMode">
+            {{ focusMode === 'continuous' ? 'Lock Manual Focus' : 'Switch to Auto Focus' }}
+          </button>
+        </div>
+        <input 
+          v-model.number="focusValue" 
+          type="range" 
+          min="0.0" 
+          max="1.0" 
+          step="0.01" 
+          :disabled="!isStreaming || focusMode === 'continuous'" 
+          @input="handleApplyCameraSettings"
+        />
       </div>
 
+      <!-- White Balance (Kelvin & Tint) -->
+      <div class="control-box">
+        <div class="control-header">
+          <label>White Balance: <strong>{{ wbMode === 'continuous' ? 'AUTO' : wbTemperature + 'K / Tint: ' + wbTint }}</strong></label>
+          <button class="btn-sm" :disabled="!isStreaming" @click="handleToggleWBMode">
+            {{ wbMode === 'continuous' ? 'Lock Manual WB' : 'Switch to Auto WB' }}
+          </button>
+        </div>
+        <div v-if="wbMode === 'locked'" class="field-group">
+          <div class="field">
+            <label>Temp ({{ wbTemperature }}K):</label>
+            <input v-model.number="wbTemperature" type="range" min="2500" max="9000" step="50" :disabled="!isStreaming" @input="handleApplyCameraSettings"/>
+          </div>
       <div class="field">
-        <label>ISO ({{ isoValue }}):</label>
-        <input v-model.number="isoValue" type="range" min="50" max="1200" step="10" :disabled="!isStreaming" @input="handleApplySettings"/>
+            <label>Tint ({{ wbTint }}):</label>
+            <input v-model.number="wbTint" type="range" min="-100" max="100" step="1" :disabled="!isStreaming" @input="handleApplyCameraSettings"/>
+          </div>
+        </div>
       </div>
 
+      <!-- ISO Exposure -->
+      <div class="field">
+        <label>ISO Exposure ({{ isoValue }}):</label>
+        <input v-model.number="isoValue" type="range" :min="minISO" :max="maxISO" step="5" :disabled="!isStreaming" @input="handleApplyCameraSettings"/>
+      </div>
+
+      <!-- Shutter Speed -->
       <div class="field">
         <label>Shutter Speed ({{ shutterSpeed }}s):</label>
-        <input v-model.number="shutterSpeed" type="range" min="0.0005" max="0.1" step="0.0005" :disabled="!isStreaming" @input="handleApplySettings"/>
+        <input v-model.number="shutterSpeed" type="range" :min="minShutter" :max="maxShutter" step="0.0005" :disabled="!isStreaming" @input="handleApplyCameraSettings"/>
+      </div>
+
+      <!-- Digital Zoom -->
+      <div class="field">
+        <label>Digital Zoom ({{ zoomValue }}x):</label>
+        <input v-model.number="zoomValue" type="range" min="1.0" :max="maxZoom" step="0.1" :disabled="!isStreaming" @input="handleApplyCameraSettings"/>
       </div>
     </section>
 
     <!-- Diagnostics -->
     <section class="card status-box">
         <p><strong>Status:</strong> {{ statusMessage || 'Ready' }}</p>
-      <pre v-if="lastResponse">{{ JSON.stringify(lastResponse, null, 2) }}</pre>
+      <pre v-if="deviceCapabilities">{{ JSON.stringify(deviceCapabilities, null, 2) }}</pre>
     </section>
   </main>
 </template>
@@ -242,7 +314,7 @@ onUnmounted(() => {
   margin-bottom: 1rem;
 }
 
-h1 { font-size: 1.25rem; margin: 0; }
+h1 { font-size: 1.2rem; margin: 0; }
 h2 { font-size: 0.95rem; margin: 0 0 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding-bottom: 0.3rem; }
 
 .badge-group { display: flex; gap: 0.4rem; }
@@ -267,8 +339,30 @@ h2 { font-size: 0.95rem; margin: 0 0 0.75rem 0; border-bottom: 1px solid rgba(25
   margin-bottom: 1rem;
 }
 
-.card.disabled {
-  opacity: 0.5;
+.card.disabled { opacity: 0.5; }
+
+.control-box {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.6rem;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.btn-sm {
+  width: auto;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+  background: #3a3a3c;
+  color: #fff;
+  border-radius: 4px;
 }
 
 .field-group { display: flex; gap: 0.75rem; }
@@ -296,5 +390,5 @@ button { width: 100%; padding: 0.65rem; font-size: 0.9rem; font-weight: 600; bor
 .metric-value { display: block; font-size: 1.1rem; font-weight: bold; color: #34c759; margin-top: 0.2rem; }
 
 .status-box { font-size: 0.8rem; }
-pre { background: rgba(0, 0, 0, 0.5); padding: 0.5rem; border-radius: 6px; color: #34c759; font-size: 0.75rem; }
+pre { background: rgba(0, 0, 0, 0.5); padding: 0.5rem; border-radius: 6px; color: #34c759; font-size: 0.72rem; overflow-x: auto; }
 </style>

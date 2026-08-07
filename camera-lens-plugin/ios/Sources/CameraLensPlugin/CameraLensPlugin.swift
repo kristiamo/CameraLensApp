@@ -22,7 +22,14 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         CAPPluginMethod(name: "getEncoderStats", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "connectWebSocket", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "disconnectWebSocket", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getWebSocketStatus", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getWebSocketStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getDeviceCapabilities", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setISO", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setShutterSpeed", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setFocusDistance", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setZoomFactor", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setLensType", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setWhiteBalance", returnType: CAPPluginReturnPromise)
     ]
     
     // Capture Session Objects
@@ -177,6 +184,57 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         }
     }
 
+    // MARK: - Device Capabilities Query (Phase 4)
+
+    @objc func getDeviceCapabilities(_ call: CAPPluginCall) {
+        sessionQueue.async { [weak self] in
+            guard let self = self, let device = self.activeDevice else {
+                call.reject("No active camera device available")
+                return
+            }
+
+            let minISO = Float(device.activeFormat.minISO)
+            let maxISO = Float(device.activeFormat.maxISO)
+            let minShutter = Float(device.activeFormat.minExposureDuration.seconds)
+            let maxShutter = Float(device.activeFormat.maxExposureDuration.seconds)
+            let minZoom = Float(device.minAvailableVideoZoomFactor)
+            let maxZoom = Float(device.maxAvailableVideoZoomFactor)
+
+            let currentISO = device.iso
+            let currentShutter = Float(device.exposureDuration.seconds)
+            let currentZoom = Float(device.videoZoomFactor)
+            let currentFocus = device.lensPosition
+            let focusModeStr = (device.focusMode == .locked) ? "locked" : "continuous"
+
+            let currentGains = device.deviceWhiteBalanceGains
+            let tempAndTint = device.temperatureAndTintValues(for: currentGains)
+            let wbModeStr = (device.whiteBalanceMode == .locked) ? "locked" : "continuous"
+
+            let caps: [String: Any] = [
+                "minISO": minISO,
+                "maxISO": maxISO,
+                "minShutter": minShutter,
+                "maxShutter": maxShutter,
+                "minZoom": minZoom,
+                "maxZoom": maxZoom,
+                "currentISO": currentISO,
+                "currentShutter": currentShutter,
+                "currentZoom": currentZoom,
+                "currentFocus": currentFocus,
+                "focusMode": focusModeStr,
+                "wbTemperature": tempAndTint.temperature,
+                "wbTint": tempAndTint.tint,
+                "wbMode": wbModeStr,
+                "supportsManualFocus": device.isFocusModeSupported(.locked),
+                "supportsCustomExposure": device.isExposureModeSupported(.custom),
+                "supportsManualWB": device.isWhiteBalanceModeSupported(.locked),
+                "activeLens": self.getLensTypeString(from: device.deviceType)
+            ]
+
+            call.resolve(caps)
+        }
+    }
+
     // MARK: - Hardware & Encoder Configurations
 
     @objc func configureLens(_ call: CAPPluginCall) {
@@ -184,8 +242,17 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         let shutter = call.getFloat("shutter")
         let zoom = call.getFloat("zoom")
         let lensType = call.getString("lensType")
+        let focus = call.getFloat("focus")
+        let focusMode = call.getString("focusMode")
+        let wbTemp = call.getFloat("wbTemperature")
+        let wbTint = call.getFloat("wbTint")
+        let wbMode = call.getString("wbMode")
 
-        applyLensConfiguration(iso: iso, shutter: shutter, zoom: zoom, lensType: lensType) { error in
+        applyLensConfiguration(
+            iso: iso, shutter: shutter, zoom: zoom, lensType: lensType,
+            focus: focus, focusMode: focusMode,
+            wbTemperature: wbTemp, wbTint: wbTint, wbMode: wbMode
+        ) { error in
             if let err = error {
                 call.reject(err)
             } else {
@@ -194,7 +261,71 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         }
     }
 
-    private func applyLensConfiguration(iso: Float?, shutter: Float?, zoom: Float?, lensType: String?, completion: @escaping (String?) -> Void) {
+    @objc func setISO(_ call: CAPPluginCall) {
+        guard let iso = call.getFloat("iso") else {
+            call.reject("ISO value required")
+            return
+        }
+        let shutter = call.getFloat("shutter")
+        applyLensConfiguration(iso: iso, shutter: shutter, zoom: nil, lensType: nil, focus: nil, focusMode: nil, wbTemperature: nil, wbTint: nil, wbMode: nil) { err in
+            if let err = err { call.reject(err) } else { call.resolve(["status": "success"]) }
+        }
+    }
+
+    @objc func setShutterSpeed(_ call: CAPPluginCall) {
+        guard let shutter = call.getFloat("shutter") else {
+            call.reject("Shutter value required")
+            return
+        }
+        let iso = call.getFloat("iso")
+        applyLensConfiguration(iso: iso, shutter: shutter, zoom: nil, lensType: nil, focus: nil, focusMode: nil, wbTemperature: nil, wbTint: nil, wbMode: nil) { err in
+            if let err = err { call.reject(err) } else { call.resolve(["status": "success"]) }
+        }
+    }
+
+    @objc func setFocusDistance(_ call: CAPPluginCall) {
+        let focus = call.getFloat("focus")
+        let mode = call.getString("mode") ?? (focus != nil ? "locked" : "continuous")
+        applyLensConfiguration(iso: nil, shutter: nil, zoom: nil, lensType: nil, focus: focus, focusMode: mode, wbTemperature: nil, wbTint: nil, wbMode: nil) { err in
+            if let err = err { call.reject(err) } else { call.resolve(["status": "success"]) }
+        }
+    }
+
+    @objc func setZoomFactor(_ call: CAPPluginCall) {
+        guard let zoom = call.getFloat("zoom") else {
+            call.reject("Zoom value required")
+            return
+        }
+        applyLensConfiguration(iso: nil, shutter: nil, zoom: zoom, lensType: nil, focus: nil, focusMode: nil, wbTemperature: nil, wbTint: nil, wbMode: nil) { err in
+            if let err = err { call.reject(err) } else { call.resolve(["status": "success"]) }
+        }
+    }
+
+    @objc func setLensType(_ call: CAPPluginCall) {
+        guard let lensType = call.getString("lensType") else {
+            call.reject("lensType string required")
+            return
+        }
+        applyLensConfiguration(iso: nil, shutter: nil, zoom: nil, lensType: lensType, focus: nil, focusMode: nil, wbTemperature: nil, wbTint: nil, wbMode: nil) { err in
+            if let err = err { call.reject(err) } else { call.resolve(["status": "success"]) }
+        }
+    }
+
+    @objc func setWhiteBalance(_ call: CAPPluginCall) {
+        let temp = call.getFloat("temperature")
+        let tint = call.getFloat("tint")
+        let mode = call.getString("mode") ?? ((temp != nil || tint != nil) ? "locked" : "continuous")
+        applyLensConfiguration(iso: nil, shutter: nil, zoom: nil, lensType: nil, focus: nil, focusMode: nil, wbTemperature: temp, wbTint: tint, wbMode: mode) { err in
+            if let err = err { call.reject(err) } else { call.resolve(["status": "success"]) }
+        }
+    }
+
+    private func applyLensConfiguration(
+        iso: Float?, shutter: Float?, zoom: Float?, lensType: String?,
+        focus: Float?, focusMode: String?,
+        wbTemperature: Float?, wbTint: Float?, wbMode: String?,
+        completion: @escaping (String?) -> Void
+    ) {
         sessionQueue.async { [weak self] in
             guard let self = self else {
                 completion("Plugin instance unavailable")
@@ -216,18 +347,62 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         do {
             try device.lockForConfiguration()
             
-                if let targetISO = iso, let targetShutter = shutter {
+                // Exposure Controls
+                if iso != nil || shutter != nil {
+                    let targetISO = iso ?? device.iso
+                    let targetShutter = shutter ?? Float(device.exposureDuration.seconds)
+
                     let clampedISO = min(max(targetISO, device.activeFormat.minISO), device.activeFormat.maxISO)
                     let duration = CMTime(seconds: Double(targetShutter), preferredTimescale: 1000000)
                     let clampedDuration = max(min(duration, device.activeFormat.maxExposureDuration), device.activeFormat.minExposureDuration)
             
+                    if device.isExposureModeSupported(.custom) {
                     device.setExposureModeCustom(duration: clampedDuration, iso: clampedISO, completionHandler: nil)
                 }
+                }
 
+                // Digital Zoom Control
                 if let targetZoom = zoom {
                     let clampedZoom = min(max(CGFloat(targetZoom), device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
                     device.videoZoomFactor = clampedZoom
             }
+            
+                // Focus Control
+                if let fMode = focusMode, fMode == "continuous" {
+                    if device.isFocusModeSupported(.continuousAutoFocus) {
+                        device.focusMode = .continuousAutoFocus
+                    }
+                } else if let targetFocus = focus {
+                    if device.isFocusModeSupported(.locked) {
+                        let clampedFocus = min(max(targetFocus, 0.0), 1.0)
+                        device.focusMode = .locked
+                        device.setFocusModeLocked(lensPosition: clampedFocus, completionHandler: nil)
+                    }
+                }
+
+                // White Balance Control
+                if let wMode = wbMode, wMode == "continuous" {
+                    if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                        device.whiteBalanceMode = .continuousAutoWhiteBalance
+                    }
+                } else if wbTemperature != nil || wbTint != nil {
+                    if device.isWhiteBalanceModeSupported(.locked) {
+                        let currentTT = device.temperatureAndTintValues(for: device.deviceWhiteBalanceGains)
+                        let targetTemp = wbTemperature ?? currentTT.temperature
+                        let targetTint = wbTint ?? currentTT.tint
+
+                        let tempTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: targetTemp, tint: targetTint)
+                        var gains = device.deviceWhiteGains(for: tempTint)
+                        let maxGain = device.maxWhiteBalanceGain
+
+                        gains.redGain = min(max(gains.redGain, 1.0), maxGain)
+                        gains.greenGain = min(max(gains.greenGain, 1.0), maxGain)
+                        gains.blueGain = min(max(gains.blueGain, 1.0), maxGain)
+
+                        device.whiteBalanceMode = .locked
+                        device.setWhiteBalanceModeLocked(with: gains, completionHandler: nil)
+                    }
+                }
             
             device.unlockForConfiguration()
                 completion(nil)
@@ -273,7 +448,7 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         }
     }
 
-    // MARK: - Native WebSocket Management (Phase 3)
+    // MARK: - Native WebSocket Management
 
     @objc func connectWebSocket(_ call: CAPPluginCall) {
         guard let ip = call.getString("ip"), !ip.isEmpty else {
@@ -353,7 +528,6 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
                 @unknown default:
                     break
                 }
-                // Recursively listen for next inbound message
                 self.listenWebSocketMessages()
             }
         }
@@ -366,19 +540,34 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
             return
         }
 
-        if action == "configureLens" {
+        if action == "configureLens" || action == "setCamera" {
             let iso = (json["iso"] as? NSNumber)?.floatValue
             let shutter = (json["shutter"] as? NSNumber)?.floatValue
             let zoom = (json["zoom"] as? NSNumber)?.floatValue
             let lensType = json["lensType"] as? String
+            let focus = (json["focus"] as? NSNumber)?.floatValue
+            let focusMode = json["focusMode"] as? String
+            let wbTemp = (json["wbTemperature"] as? NSNumber)?.floatValue
+            let wbTint = (json["wbTint"] as? NSNumber)?.floatValue
+            let wbMode = json["wbMode"] as? String
 
-            applyLensConfiguration(iso: iso, shutter: shutter, zoom: zoom, lensType: lensType) { [weak self] error in
+            applyLensConfiguration(
+                iso: iso, shutter: shutter, zoom: zoom, lensType: lensType,
+                focus: focus, focusMode: focusMode,
+                wbTemperature: wbTemp, wbTint: wbTint, wbMode: wbMode
+            ) { [weak self] error in
                 if error == nil {
                     var payload: [String: Any] = [:]
                     if let iso = iso { payload["iso"] = iso }
                     if let shutter = shutter { payload["shutter"] = shutter }
                     if let zoom = zoom { payload["zoom"] = zoom }
                     if let lensType = lensType { payload["lensType"] = lensType }
+                    if let focus = focus { payload["focus"] = focus }
+                    if let focusMode = focusMode { payload["focusMode"] = focusMode }
+                    if let wbTemp = wbTemp { payload["wbTemperature"] = wbTemp }
+                    if let wbTint = wbTint { payload["wbTint"] = wbTint }
+                    if let wbMode = wbMode { payload["wbMode"] = wbMode }
+
                     self?.notifyListeners("remoteCameraConfig", data: payload)
                 }
             }
@@ -394,15 +583,11 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
         }
     }
 
-    // MARK: - H264EncoderDelegate Interface (Phase 3 Networking Output)
+    // MARK: - H264EncoderDelegate Interface
 
     public func didEncodeH264Frame(naluData: Data, isKeyFrame: Bool, timestamp: Double) {
         guard isWsConnected, let ws = webSocketTask else { return }
 
-        // Packet Structure (Header: 9 bytes):
-        // [Byte 0: Flags (0x01 if keyframe, 0x00 if P-frame)]
-        // [Bytes 1..8: Timestamp (UInt64 big endian milliseconds)]
-        // [Bytes 9..N: Annex-B NALU Data]
         var packet = Data(capacity: 9 + naluData.count)
         var flags: UInt8 = isKeyFrame ? 0x01 : 0x00
         let timeMs = UInt64(timestamp * 1000)
@@ -564,7 +749,6 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
 
     private func setupPreviewLayer() {
         guard let webView = self.bridge?.webView, let superview = webView.superview else {
-            print("[CameraLensPlugin] WebView or Superview is nil")
             return
         }
     
@@ -618,6 +802,17 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
             return .builtInTelephotoCamera
         default:
             return .builtInWideAngleCamera
+        }
+    }
+
+    private func getLensTypeString(from deviceType: AVCaptureDevice.DeviceType) -> String {
+        switch deviceType {
+        case .builtInUltraWideCamera:
+            return "UltraWide"
+        case .builtInTelephotoCamera:
+            return "Telephoto"
+        default:
+            return "Wide"
         }
     }
 
