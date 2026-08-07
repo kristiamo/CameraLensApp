@@ -10,6 +10,10 @@ export function useCamera() {
     const isStreaming = ref(false);
     const encoderStats = ref(null);
 
+    // WebSocket Reactive State
+    const wsConnected = ref(false);
+    const wsServerUrl = ref('');
+
     async function startCameraSession(preset = 'hd1920x1080', lensType = 'Wide', bitrate = 4000000, fps = 30) {
         isLoading.value = true;
         statusMessage.value = 'Starting camera capture session & encoder...';
@@ -100,16 +104,81 @@ export function useCamera() {
         }
     }
 
+    /**
+     * Connect to desktop WebSocket server
+     */
+    async function connectWebSocket(ip, port = 8080) {
+        isLoading.value = true;
+        statusMessage.value = `Connecting to WebSocket ws://${ip}:${port}...`;
+        try {
+            const res = await CameraLensPlugin.connectWebSocket({ ip, port: parseInt(port) });
+            wsConnected.value = true;
+            wsServerUrl.value = res.url;
+            statusMessage.value = `WebSocket connected to ${res.url}`;
+            return res;
+        } catch (error) {
+            wsConnected.value = false;
+            statusMessage.value = `WebSocket Connection Error: ${error.message || error}`;
+            console.error('Error connecting WebSocket:', error);
+            throw error;
+        } finally {
+            isLoading.value = false;
+        }
+    }
+
+    /**
+     * Disconnect from desktop WebSocket server
+     */
+    async function disconnectWebSocket() {
+        isLoading.value = true;
+        try {
+            const res = await CameraLensPlugin.disconnectWebSocket();
+            wsConnected.value = false;
+            wsServerUrl.value = '';
+            statusMessage.value = 'WebSocket disconnected';
+            return res;
+        } catch (error) {
+            statusMessage.value = `WebSocket Disconnect Error: ${error.message || error}`;
+            console.error('Error disconnecting WebSocket:', error);
+            throw error;
+        } finally {
+            isLoading.value = false;
+        }
+    }
+
+    /**
+     * Register listeners for remote controls dispatched by Desktop
+     */
+    function setupRemoteListeners(onCameraConfig, onEncoderConfig) {
+        const camListener = CameraLensPlugin.addListener('remoteCameraConfig', (data) => {
+            if (onCameraConfig) onCameraConfig(data);
+        });
+
+        const encListener = CameraLensPlugin.addListener('remoteEncoderConfig', (data) => {
+            if (onEncoderConfig) onEncoderConfig(data);
+        });
+
+        return () => {
+            camListener.then(l => l.remove());
+            encListener.then(l => l.remove());
+        };
+    }
+
     return {
         statusMessage,
         lastResponse,
         isLoading,
         isStreaming,
         encoderStats,
+        wsConnected,
+        wsServerUrl,
         startCameraSession,
         stopCameraSession,
         setManualLensSettings,
         updateEncoderSettings,
-        fetchEncoderStats
+        fetchEncoderStats,
+        connectWebSocket,
+        disconnectWebSocket,
+        setupRemoteListeners
     };
 }

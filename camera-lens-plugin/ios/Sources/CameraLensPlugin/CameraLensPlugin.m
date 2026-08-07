@@ -9,4 +9,7 @@ CAP_PLUGIN(CameraLensPlugin, "CameraLensPlugin",
            CAP_PLUGIN_METHOD(stopSession, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(setEncoderSettings, CAPPluginReturnPromise);
            CAP_PLUGIN_METHOD(getEncoderStats, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(connectWebSocket, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(disconnectWebSocket, CAPPluginReturnPromise);
+           CAP_PLUGIN_METHOD(getWebSocketStatus, CAPPluginReturnPromise);
 )

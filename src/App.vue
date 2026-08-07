@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useCamera } from './composables/useCamera';
 
 const { 
@@ -8,12 +8,21 @@ const {
   isLoading, 
   isStreaming,
   encoderStats,
+  wsConnected,
+  wsServerUrl,
   startCameraSession, 
   stopCameraSession, 
   setManualLensSettings, 
   updateEncoderSettings,
-  fetchEncoderStats
+  fetchEncoderStats,
+  connectWebSocket,
+  disconnectWebSocket,
+  setupRemoteListeners
 } = useCamera();
+
+// WebSocket Control State
+const desktopIp = ref('192.168.1.166');
+const desktopPort = ref(8080);
 
 // Control State
 const selectedPreset = ref('hd1920x1080');
@@ -26,10 +35,10 @@ const shutterSpeed = ref(0.02);
 const zoomValue = ref(1.0);
 
 let statsInterval = null;
+let removeListeners = null;
 
 async function handleStartSession() {
   await startCameraSession(selectedPreset.value, selectedLens.value, targetBitrate.value, targetFPS.value);
-  // Start polling encoder metrics every 500ms
   statsInterval = setInterval(fetchEncoderStats, 500);
 }
 
@@ -51,23 +60,75 @@ async function handleApplySettings() {
   });
 }
 
+async function handleToggleWebSocket() {
+  if (wsConnected.value) {
+    await disconnectWebSocket();
+  } else {
+    await connectWebSocket(desktopIp.value, desktopPort.value);
+  }
+}
+
+onMounted(() => {
+  // Sync state when desktop modifies camera/encoder settings remotely
+  removeListeners = setupRemoteListeners(
+    (camConfig) => {
+      if (camConfig.iso !== undefined) isoValue.value = camConfig.iso;
+      if (camConfig.shutter !== undefined) shutterSpeed.value = camConfig.shutter;
+      if (camConfig.zoom !== undefined) zoomValue.value = camConfig.zoom;
+      if (camConfig.lensType !== undefined) selectedLens.value = camConfig.lensType;
+    },
+    (encConfig) => {
+      if (encConfig.bitrate !== undefined) targetBitrate.value = encConfig.bitrate;
+      if (encConfig.fps !== undefined) targetFPS.value = encConfig.fps;
+    }
+  );
+});
+
 onUnmounted(() => {
   if (statsInterval) clearInterval(statsInterval);
+  if (removeListeners) removeListeners();
 });
 </script>
 
 <template>
   <main class="container">
     <header class="header">
-      <h1>Phase 2: H.264 Encoder Pipeline</h1>
+      <h1>Phase 3: Real-Time Streamer</h1>
+      <div class="badge-group">
       <span class="badge" :class="{ active: isStreaming }">
         {{ isStreaming ? 'ENCODER RUNNING' : 'STOPPED' }}
       </span>
+        <span class="badge ws-badge" :class="{ active: wsConnected }">
+          {{ wsConnected ? 'NET STREAMING' : 'OFFLINE' }}
+        </span>
+      </div>
     </header>
 
-    <!-- 1. Session & Encoder Setup -->
+    <!-- 1. Desktop WebSocket Streaming Target -->
     <section class="card">
-      <h2>1. Session & H.264 Encoder Config</h2>
+      <h2>1. Desktop Network Target</h2>
+      <div class="field-group">
+        <div class="field">
+          <label>Server IP Address:</label>
+          <input v-model="desktopIp" type="text" placeholder="192.168.1.100" :disabled="wsConnected"/>
+        </div>
+        <div class="field port-field">
+          <label>Port:</label>
+          <input v-model.number="desktopPort" type="number" placeholder="8080" :disabled="wsConnected"/>
+        </div>
+      </div>
+      <button 
+        :class="wsConnected ? 'btn-danger' : 'btn-primary'" 
+        :disabled="isLoading" 
+        @click="handleToggleWebSocket"
+      >
+        {{ wsConnected ? 'Disconnect Desktop' : 'Connect to Desktop Server' }}
+      </button>
+    </section>
+
+    <!-- 2. Session & Encoder Setup -->
+    <section class="card">
+      <h2>2. Session & H.264 Encoder Config</h2>
       
       <div class="field-group">
       <div class="field">
@@ -103,9 +164,9 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <!-- 2. Real-Time Hardware Encoder Metrics -->
+    <!-- 3. Real-Time Hardware Encoder Metrics -->
     <section v-if="isStreaming && encoderStats" class="card stats-card">
-      <h2>Hardware H.264 Encoding Metrics</h2>
+      <h2>Hardware Encoding & Stream Metrics</h2>
       <div class="metrics-grid">
         <div class="metric">
           <span class="metric-label">Total Frames</span>
@@ -126,9 +187,9 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <!-- 3. Manual Camera Controls -->
+    <!-- 4. Manual Camera Controls -->
     <section class="card" :class="{ disabled: !isStreaming }">
-      <h2>3. Camera Hardware Controls</h2>
+      <h2>4. Camera Hardware Controls</h2>
       
       <div class="field">
         <label>Switch Lens:</label>
@@ -184,17 +245,17 @@ onUnmounted(() => {
 h1 { font-size: 1.25rem; margin: 0; }
 h2 { font-size: 0.95rem; margin: 0 0 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.2); padding-bottom: 0.3rem; }
 
+.badge-group { display: flex; gap: 0.4rem; }
 .badge {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: bold;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.4rem;
   border-radius: 4px;
   background: rgba(255, 59, 48, 0.8);
 }
-
-.badge.active {
-  background: rgba(52, 199, 89, 0.9);
-}
+.badge.active { background: rgba(52, 199, 89, 0.9); }
+.badge.ws-badge { background: rgba(142, 142, 147, 0.8); }
+.badge.ws-badge.active { background: rgba(0, 122, 255, 0.9); }
 
 .card {
   background: rgba(0, 0, 0, 0.65);
@@ -212,6 +273,7 @@ h2 { font-size: 0.95rem; margin: 0 0 0.75rem 0; border-bottom: 1px solid rgba(25
 
 .field-group { display: flex; gap: 0.75rem; }
 .field { display: flex; flex-direction: column; margin-bottom: 0.75rem; flex: 1; }
+.port-field { max-width: 100px; }
 
 label { font-size: 0.8rem; margin-bottom: 0.25rem; color: #ccc; }
 select, input {
