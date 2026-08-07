@@ -1,7 +1,9 @@
 ﻿import { ref } from 'vue';
 import { registerPlugin } from '@capacitor/core';
 
-const CameraLensPlugin = registerPlugin('CameraLensPlugin');
+const CameraLensPlugin = registerPlugin('CameraLensPlugin', {
+    web: () => import('../mocks/custom-plugins.js').then(m => m.MockCameraLensPlugin),
+});
 
 export function useCamera() {
     const statusMessage = ref('');

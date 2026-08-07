@@ -14,7 +14,6 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
     public let identifier = "CameraLensPlugin" 
     public let jsName = "CameraLensPlugin" 
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "deviceAction", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "configureLens", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startSession", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopSession", returnType: CAPPluginReturnPromise),
@@ -67,11 +66,5 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
     override public func load() {
         super.load()
         self.encoderDelegate = self
-    }
-
-    // MARK: - Legacy / Test Action
-    @objc func deviceAction(_ call: CAPPluginCall) {
-        let inputMessage = call.getString("message") ?? "No message provided"
-        call.resolve(["value": "Native iOS received: \(inputMessage)"])
     }
 }

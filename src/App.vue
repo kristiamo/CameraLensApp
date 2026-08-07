@@ -44,6 +44,9 @@ const zoomValue = ref(1.0);
 const activePanel = ref(null);   // 'network' | 'preset' | 'stats'
 const activeControl = ref(null); // 'lens' | 'zoom' | 'iso' | 'shutter' | 'focus' | 'wb'
 
+// HACK: just css transform UI, until we modify AVCaptureVideoPreviewLayer orientation properly
+const hudLandscape = ref(false);
+
 let statsInterval = null;
 let removeListeners = null;
 
@@ -134,7 +137,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="camera-hud" @click.self="activePanel = null">
+  <div class="camera-hud" :class="{ 'hud-landscape': hudLandscape }" @click.self="activePanel = null">
     <!-- Top Status & Quick Flyouts Bar -->
     <header class="top-bar">
       <div class="top-bar-left">
@@ -355,6 +358,17 @@ onUnmounted(() => {
 
     <!-- Bottom Camera Control Edge & Shutter Button -->
     <footer class="bottom-bar">
+      <!-- Main Shutter / Stream Button -->
+      <div class="shutter-wrapper">
+        <button
+            class="shutter-btn"
+            :class="{ streaming: isStreaming }"
+            :disabled="isLoading"
+            @click="isStreaming ? handleStopSession() : handleStartSession()"
+        >
+          <div class="shutter-inner"></div>
+        </button>
+      </div>
       <!-- Camera Settings Pills Row -->
       <div class="controls-scroll" :class="{ disabled: !isStreaming }">
         <button
@@ -417,17 +431,13 @@ onUnmounted(() => {
           <span class="param-val">{{ wbMode === 'continuous' ? 'AWB' : wbTemperature + 'K' }}</span>
         </button>
       </div>
-
-      <!-- Main Shutter / Stream Button -->
-      <div class="shutter-wrapper">
-        <button
-            class="shutter-btn"
-            :class="{ streaming: isStreaming }"
-            :disabled="isLoading"
-            @click="isStreaming ? handleStopSession() : handleStartSession()"
-        >
-          <div class="shutter-inner"></div>
-        </button>
+      
+      <!-- Orientation Button -->
+      <div class="orientation-wrapper" @click="hudLandscape = !hudLandscape">
+        <svg fill="#ffffff" height="32px" width="32px" viewBox="0 0 214.367 214.367" xml:space="preserve">
+          <g stroke-width="0"></g><g stroke-linecap="round" stroke-linejoin="round"></g>
+          <g><path d="M202.403,95.22c0,46.312-33.237,85.002-77.109,93.484v25.663l-69.76-40l69.76-40v23.494 c27.176-7.87,47.109-32.964,47.109-62.642c0-35.962-29.258-65.22-65.22-65.22s-65.22,29.258-65.22,65.22 c0,9.686,2.068,19.001,6.148,27.688l-27.154,12.754c-5.968-12.707-8.994-26.313-8.994-40.441C11.964,42.716,54.68,0,107.184,0 S202.403,42.716,202.403,95.22z"></path></g>
+        </svg>
       </div>
     </footer>
   </div>
@@ -447,15 +457,28 @@ onUnmounted(() => {
   flex-direction: column;
   justify-content: space-between;
 }
+.camera-hud.hud-landscape {
+  transform: rotate(90deg);
+  transform-origin: top left;
+  width: 100vh;
+  height: 100vw;
+  position: absolute;
+  top: 0;
+  left: 100%;
+  overflow-x: hidden;
+}
 
 /* TOP BAR */
 .top-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 40px 12px 16px;
   background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
   z-index: 20;
+}
+.hud-landscape .top-bar {
+  padding: 12px 16px;
 }
 
 .top-bar-left, .top-bar-right {
@@ -510,7 +533,7 @@ onUnmounted(() => {
 /* STATUS TOAST */
 .status-toast {
   position: absolute;
-  top: 60px;
+  top: 80px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.75);
@@ -522,6 +545,9 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.15);
   z-index: 15;
   pointer-events: none;
+}
+.hud-landscape .status-toast {
+  top: 60px;
 }
 
 /* FLYOUT POPUP CARDS */
@@ -749,6 +775,13 @@ input, select {
   border-radius: 6px;
   width: 50%;
   height: 50%;
+}
+
+.orientation-wrapper {
+  position: absolute;
+  bottom: 85px;
+  right: 10px;
+  background: transparent;
 }
 
 /* BUTTON STYLES */
