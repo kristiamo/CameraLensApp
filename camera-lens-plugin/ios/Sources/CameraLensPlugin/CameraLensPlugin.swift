@@ -268,7 +268,7 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
             presentationTimeStamp: pts,
             duration: duration,
             frameProperties: nil,
-            sourceFrameRefCon: nil,
+            sourceFrameRefcon: nil,
             infoFlagsOut: &flags
         )
     }
@@ -346,7 +346,7 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
                 var spsSize: Int = 0
                 var spsCount: Int = 0
                 var spsPointer: UnsafePointer<UInt8>?
-                if CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDesc, index: 0, parameterSetPointerOut: &spsPointer, parameterSetSizeOut: &spsSize, parameterSetCountOut: &spsCount, naluHeaderSizeOut: nil) == noErr, let sps = spsPointer {
+                if CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDesc, parameterSetIndex: 0, parameterSetPointerOut: &spsPointer, parameterSetSizeOut: &spsSize, parameterSetCountOut: &spsCount, nalUnitHeaderLengthOut: nil) == noErr, let sps = spsPointer {
                     naluPayload.append(contentsOf: startCode)
                     naluPayload.append(sps, count: spsSize)
                 }
@@ -354,7 +354,7 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
                 var ppsSize: Int = 0
                 var ppsCount: Int = 0
                 var ppsPointer: UnsafePointer<UInt8>?
-                if CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDesc, index: 1, parameterSetPointerOut: &ppsPointer, parameterSetSizeOut: &ppsSize, parameterSetCountOut: &ppsCount, naluHeaderSizeOut: nil) == noErr, let pps = ppsPointer {
+                if CMVideoFormatDescriptionGetH264ParameterSetAtIndex(formatDesc, parameterSetIndex: 1, parameterSetPointerOut: &ppsPointer, parameterSetSizeOut: &ppsSize, parameterSetCountOut: &ppsCount, nalUnitHeaderLengthOut: nil) == noErr, let pps = ppsPointer {
                     naluPayload.append(contentsOf: startCode)
                     naluPayload.append(pps, count: ppsSize)
                 }
