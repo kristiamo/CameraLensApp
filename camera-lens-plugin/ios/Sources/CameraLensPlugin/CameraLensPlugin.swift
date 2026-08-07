@@ -392,7 +392,7 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
                         let targetTint = wbTint ?? currentTT.tint
 
                         let tempTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(temperature: targetTemp, tint: targetTint)
-                        var gains = device.deviceWhiteGains(for: tempTint)
+                        var gains = device.deviceWhiteBalanceGains(for: tempTint)
                         let maxGain = device.maxWhiteBalanceGain
 
                         gains.redGain = min(max(gains.redGain, 1.0), maxGain)
