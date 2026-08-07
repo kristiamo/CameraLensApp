@@ -8,24 +8,19 @@ export function useCamera() {
     const lastResponse = ref(null);
     const isLoading = ref(false);
     const isStreaming = ref(false);
+    const encoderStats = ref(null);
 
-    /**
-     * Start the native capture session with resolution & lens parameters
-     * @param {string} preset - Resolution preset ("hd1280x720", "hd1920x1080", "hd4K3840x2160")
-     * @param {string} lensType - "Wide", "UltraWide", or "Telephoto"
-     */
-    async function startCameraSession(preset = 'hd1920x1080', lensType = 'Wide') {
+    async function startCameraSession(preset = 'hd1920x1080', lensType = 'Wide', bitrate = 4000000, fps = 30) {
         isLoading.value = true;
-        statusMessage.value = 'Starting camera capture session...';
+        statusMessage.value = 'Starting camera capture session & encoder...';
         try {
-            // Ensure HTML document background is transparent so native layer reveals
             document.documentElement.style.backgroundColor = 'transparent';
             document.body.style.backgroundColor = 'transparent';
 
-            const res = await CameraLensPlugin.startSession({ preset, lensType });
+            const res = await CameraLensPlugin.startSession({ preset, lensType, bitrate, fps });
             lastResponse.value = res;
             isStreaming.value = true;
-            statusMessage.value = `Camera session active (${preset}, ${lensType})`;
+            statusMessage.value = `Camera & Encoder Active (${preset}, ${bitrate / 1000000}Mbps)`;
             return res;
         } catch (error) {
             statusMessage.value = `Start Session Error: ${error.message || error}`;
@@ -36,12 +31,9 @@ export function useCamera() {
         }
     }
 
-    /**
-     * Stop the native capture session and clean up memory/preview layer
-     */
     async function stopCameraSession() {
         isLoading.value = true;
-        statusMessage.value = 'Stopping camera capture session...';
+        statusMessage.value = 'Stopping session & encoder...';
         try {
             const res = await CameraLensPlugin.stopSession();
             lastResponse.value = res;
@@ -57,9 +49,6 @@ export function useCamera() {
         }
     }
 
-    /**
-     * Dynamically update manual hardware configurations on the fly
-     */
     async function setManualLensSettings({ iso, shutter, zoom, lensType }) {
         statusMessage.value = 'Updating camera parameters...';
         try {
@@ -70,7 +59,7 @@ export function useCamera() {
                 lensType: lensType || undefined
             });
             lastResponse.value = res;
-            statusMessage.value = 'Camera settings updated successfully';
+            statusMessage.value = 'Camera settings updated';
             return res;
         } catch (error) {
             statusMessage.value = `Configure Error: ${error.message || error}`;
@@ -79,13 +68,48 @@ export function useCamera() {
         }
     }
 
+    /**
+     * Dynamically update hardware H.264 encoder parameters
+     */
+    async function updateEncoderSettings(bitrate, fps, gop = 30) {
+        try {
+            const res = await CameraLensPlugin.setEncoderSettings({
+                bitrate: parseInt(bitrate),
+                fps: parseInt(fps),
+                gop: parseInt(gop)
+            });
+            lastResponse.value = res;
+            statusMessage.value = `Encoder updated: ${bitrate / 1000000}Mbps @ ${fps}FPS`;
+            return res;
+        } catch (error) {
+            statusMessage.value = `Encoder Config Error: ${error.message || error}`;
+            throw error;
+        }
+    }
+
+    /**
+     * Poll real-time hardware encoder performance statistics
+     */
+    async function fetchEncoderStats() {
+        try {
+            const res = await CameraLensPlugin.getEncoderStats();
+            encoderStats.value = res;
+            return res;
+        } catch (error) {
+            console.error('Failed to query encoder stats:', error);
+        }
+    }
+
     return {
         statusMessage,
         lastResponse,
         isLoading,
         isStreaming,
+        encoderStats,
         startCameraSession,
         stopCameraSession,
-        setManualLensSettings
+        setManualLensSettings,
+        updateEncoderSettings,
+        fetchEncoderStats
     };
 }
