@@ -1,10 +1,8 @@
 ﻿import { ref } from 'vue';
-import { registerPlugin, Capacitor } from '@capacitor/core';
+import { registerPlugin } from '@capacitor/core';
 
-const CameraLensPlugin = registerPlugin('CameraLensPlugin',
-    !Capacitor.isNativePlatform() ?
-        { web: () => import('../mocks/custom-plugins.js').then(m => m.MockCameraLensPlugin) }
-        : {}
+const CameraLensPlugin = registerPlugin('CameraLensPlugin'
+    , { web: () => import('../mocks/custom-plugins.js').then(m => m.MockCameraLensPlugin) }
 );
 
 export function useCamera() {
