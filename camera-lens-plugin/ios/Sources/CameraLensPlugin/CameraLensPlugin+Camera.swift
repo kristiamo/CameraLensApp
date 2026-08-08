@@ -371,6 +371,7 @@ extension CameraLensPlugin {
         webView.scrollView.backgroundColor = .clear
 
         self.previewLayer = layer
+        self.setupWebViewBoundsObserver()
     }
 
     internal func switchLensHardware(to lensType: String) {

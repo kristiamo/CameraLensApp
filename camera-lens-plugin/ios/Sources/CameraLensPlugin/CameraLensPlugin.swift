@@ -63,6 +63,9 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
     internal let frameProcessingQueue = DispatchQueue(label: "com.cameralens.frameQueue", qos: .userInitiated)
     internal let wsQueue = DispatchQueue(label: "com.cameralens.wsQueue", qos: .userInitiated)
 
+    // Layout Observer
+    internal var boundsObservation: NSKeyValueObservation?
+
     override public func load() {
         super.load()
         self.encoderDelegate = self
@@ -75,12 +78,28 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
                 name: UIDevice.orientationDidChangeNotification,
                 object: nil
             )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(self.handleOrientationChange),
+                name: UIApplication.didChangeStatusBarOrientationNotification,
+                object: nil
+            )
+
+            self.setupWebViewBoundsObserver()
         }
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
         UIDevice.current.endGeneratingDeviceOrientationNotifications()
+        boundsObservation?.invalidate()
+    }
+
+    internal func setupWebViewBoundsObserver() {
+        guard boundsObservation == nil, let webView = self.bridge?.webView else { return }
+        boundsObservation = webView.observe(\.bounds, options: [.new]) { [weak self] _, _ in
+            self?.handleOrientationChange()
+        }
     }
 
     // MARK: - Orientation Management
