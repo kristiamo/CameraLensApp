@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useCamera } from './composables/useCamera';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
 
 const {
   statusMessage,
@@ -44,8 +45,7 @@ const zoomValue = ref(1.0);
 const activePanel = ref(null);   // 'network' | 'preset' | 'stats'
 const activeControl = ref(null); // 'lens' | 'zoom' | 'iso' | 'shutter' | 'focus' | 'wb'
 
-// HACK: just css transform UI, until we modify AVCaptureVideoPreviewLayer orientation properly
-const hudLandscape = ref(false);
+const landscapeMode = ref(false);
 
 let statsInterval = null;
 let removeListeners = null;
@@ -56,6 +56,21 @@ const maxISO = computed(() => deviceCapabilities.value?.maxISO || 1200);
 const minShutter = computed(() => deviceCapabilities.value?.minShutter || 0.0005);
 const maxShutter = computed(() => deviceCapabilities.value?.maxShutter || 0.1);
 const maxZoom = computed(() => deviceCapabilities.value?.maxZoom || 8.0);
+
+async function toggleOrientation() {
+  const newLandscapeMode = !landscapeMode.value;
+  try {
+    if (newLandscapeMode) {
+      await ScreenOrientation.lock({ orientation: 'landscape-primary' });
+    }
+    else {
+      await ScreenOrientation.lock({ orientation: 'portrait-primary' });
+    }
+  } catch (error) {
+    console.error('Failed to toggle orientation:', error);
+  }
+  landscapeMode.value = newLandscapeMode;
+}
 
 function togglePanel(panel) {
   activePanel.value = activePanel.value === panel ? null : panel;
@@ -137,7 +152,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="camera-hud" :class="{ 'hud-landscape': hudLandscape }" @click.self="activePanel = null">
+  <div class="camera-hud" :class="{ 'hud-landscape': landscapeMode }" @click.self="activePanel = null">
     <!-- Top Status & Quick Flyouts Bar -->
     <header class="top-bar">
       <div class="top-bar-left">
@@ -433,7 +448,7 @@ onUnmounted(() => {
       </div>
       
       <!-- Orientation Button -->
-      <div class="orientation-wrapper" @click="hudLandscape = !hudLandscape">
+      <div class="orientation-btn" @click="toggleOrientation()">
         <svg fill="#ffffff" height="32px" width="32px" viewBox="0 0 214.367 214.367" xml:space="preserve">
           <g stroke-width="0"></g><g stroke-linecap="round" stroke-linejoin="round"></g>
           <g><path d="M202.403,95.22c0,46.312-33.237,85.002-77.109,93.484v25.663l-69.76-40l69.76-40v23.494 c27.176-7.87,47.109-32.964,47.109-62.642c0-35.962-29.258-65.22-65.22-65.22s-65.22,29.258-65.22,65.22 c0,9.686,2.068,19.001,6.148,27.688l-27.154,12.754c-5.968-12.707-8.994-26.313-8.994-40.441C11.964,42.716,54.68,0,107.184,0 S202.403,42.716,202.403,95.22z"></path></g>
@@ -457,16 +472,6 @@ onUnmounted(() => {
   flex-direction: column;
   justify-content: space-between;
 }
-.camera-hud.hud-landscape {
-  transform: rotate(90deg);
-  transform-origin: top left;
-  width: 100vh;
-  height: 100vw;
-  position: absolute;
-  top: 0;
-  left: 100%;
-  overflow-x: hidden;
-}
 
 /* TOP BAR */
 .top-bar {
@@ -478,7 +483,7 @@ onUnmounted(() => {
   z-index: 20;
 }
 .hud-landscape .top-bar {
-  padding: 12px 16px;
+  padding: 12px 40px 16px;
 }
 
 .top-bar-left, .top-bar-right {
@@ -547,7 +552,8 @@ onUnmounted(() => {
   pointer-events: none;
 }
 .hud-landscape .status-toast {
-  top: 60px;
+  top: 11px;
+  left: 65%
 }
 
 /* FLYOUT POPUP CARDS */
@@ -698,6 +704,11 @@ input, select {
   background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
   z-index: 20;
 }
+.hud-landscape .bottom-bar {
+  flex-direction: row;
+  padding-left: 40px;
+  padding-bottom: 10px;
+}
 
 .controls-scroll {
   display: flex;
@@ -777,14 +788,18 @@ input, select {
   height: 50%;
 }
 
-.orientation-wrapper {
+.orientation-btn {
   position: absolute;
   bottom: 85px;
   right: 10px;
   background: transparent;
 }
+.hud-landscape .orientation-btn {
+  bottom: 25px;
+  right: 25px;
+}
 
-/* BUTTON STYLES */
+  /* BUTTON STYLES */
 .btn-primary { background: #007aff; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: bold; width: 100%; }
 .btn-danger { background: #ff3b30; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: bold; width: 100%; }
 .btn-secondary { background: #34c759; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: bold; width: 100%; }
