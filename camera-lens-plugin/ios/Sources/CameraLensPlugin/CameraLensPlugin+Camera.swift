@@ -63,6 +63,11 @@ extension CameraLensPlugin {
             if self.captureSession.canAddOutput(output) {
                 self.captureSession.addOutput(output)
                 self.videoOutput = output
+                
+                // Configure native video output orientation
+                if let connection = output.connection(with: .video), connection.isVideoOrientationSupported {
+                    connection.videoOrientation = self.getCurrentVideoOrientation()
+                }
             } else {
                 self.captureSession.commitConfiguration()
                 call.reject("Cannot add video data output to session")
@@ -355,6 +360,11 @@ extension CameraLensPlugin {
         layer.videoGravity = .resizeAspectFill
         layer.frame = webView.bounds
 
+        let orientation = self.getCurrentVideoOrientation()
+        if let connection = layer.connection, connection.isVideoOrientationSupported {
+            connection.videoOrientation = orientation
+        }
+
         superview.layer.insertSublayer(layer, below: webView.layer)
         webView.isOpaque = false
         webView.backgroundColor = .clear
@@ -384,6 +394,10 @@ extension CameraLensPlugin {
         }
 
         captureSession.commitConfiguration()
+
+        if let connection = videoOutput?.connection(with: .video), connection.isVideoOrientationSupported {
+            connection.videoOrientation = getCurrentVideoOrientation()
+        }
     }
 
     internal func getDevice(for lensType: String) -> AVCaptureDevice? {

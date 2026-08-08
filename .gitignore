@@ -1,3 +1,6 @@
+/tools
+/deploy.ps1
+
 # Logs
 logs
 *.log

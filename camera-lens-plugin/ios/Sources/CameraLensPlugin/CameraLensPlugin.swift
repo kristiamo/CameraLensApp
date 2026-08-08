@@ -66,5 +66,80 @@ public class CameraLensPlugin: CAPPlugin, CAPBridgedPlugin, AVCaptureVideoDataOu
     override public func load() {
         super.load()
         self.encoderDelegate = self
+        
+        DispatchQueue.main.async {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(self.handleOrientationChange),
+                name: UIDevice.orientationDidChangeNotification,
+                object: nil
+            )
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+    }
+
+    // MARK: - Orientation Management
+
+    @objc internal func handleOrientationChange() {
+        updateOrientationAndBounds()
+    }
+
+    internal func updateOrientationAndBounds() {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            let orientation = self.getCurrentVideoOrientation()
+            
+            // 1. Update Capture Output Orientation
+            if let connection = self.videoOutput?.connection(with: .video), connection.isVideoOrientationSupported {
+                connection.videoOrientation = orientation
+            }
+            
+            // 2. Update Preview Layer Bounds and Orientation on Main Thread
+            DispatchQueue.main.async {
+                if let webView = self.bridge?.webView, let previewLayer = self.previewLayer {
+                    previewLayer.frame = webView.bounds
+                    if let connection = previewLayer.connection, connection.isVideoOrientationSupported {
+                        connection.videoOrientation = orientation
+                    }
+                }
+            }
+        }
+    }
+
+    internal func getCurrentVideoOrientation() -> AVCaptureVideoOrientation {
+        if #available(iOS 13.0, *) {
+            if let windowScene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+                switch windowScene.interfaceOrientation {
+                case .portrait:
+                    return .portrait
+                case .portraitUpsideDown:
+                    return .portraitUpsideDown
+                case .landscapeLeft:
+                    return .landscapeLeft
+                case .landscapeRight:
+                    return .landscapeRight
+                @unknown default:
+                    return .portrait
+                }
+            }
+        }
+        
+        switch UIDevice.current.orientation {
+        case .portrait:
+            return .portrait
+        case .portraitUpsideDown:
+            return .portraitUpsideDown
+        case .landscapeLeft:
+            return .landscapeRight
+        case .landscapeRight:
+            return .landscapeLeft
+        default:
+            return .portrait
+        }
     }
 }
